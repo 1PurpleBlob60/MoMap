@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My Map</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  :root { --bg:#f5f6f4; --ink:#1d2b24; --muted:#66736c; --line:#dfe3df; --accent:#1f6f5c; --danger:#b3382c; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#161c19; --ink:#e8eee9; --muted:#97a69d; --line:#2a352f; --accent:#4fb99d; --danger:#e57a6c; }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { display: flex; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); }
+  aside { width: 300px; display: flex; flex-direction: column; border-right: 1px solid var(--line); }
+  header { padding: 18px 16px 12px; }
+  h1 { font-size: 1.15rem; margin: 0 0 4px; }
+  header p { margin: 0; font-size: .85rem; color: var(--muted); line-height: 1.4; }
+  ul { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; }
+  li { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--line); cursor: pointer; }
+  li:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  li span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  li small { display: block; color: var(--muted); font-size: .75rem; }
+  button { font: inherit; cursor: pointer; border-radius: 6px; border: 1px solid var(--line); background: transparent; color: var(--ink); padding: 4px 10px; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .del { color: var(--danger); }
+  .empty { padding: 16px; color: var(--muted); font-size: .9rem; }
+  footer { padding: 12px 16px; border-top: 1px solid var(--line); }
+  #map { flex: 1; }
+  .popup input { width: 100%; padding: 6px; margin: 6px 0; border: 1px solid #bbb; border-radius: 4px; font: inherit; }
+  .popup .row { display: flex; gap: 6px; }
+  .popup button { color: #1d2b24; border-color: #bbb; }
+  @media (max-width: 700px) {
+    body { flex-direction: column-reverse; }
+    aside { width: 100%; height: 38%; border-right: 0; border-top: 1px solid var(--line); }
+    #map { height: 62%; flex: none; }
+  }
+</style>
+</head>
+<body>
+<aside>
+  <header>
+    <h1>My map</h1>
+    <p>Click anywhere on the map to drop a marker. Markers are saved in your browser.</p>
+  </header>
+  <ul id="list"></ul>
+  <footer><button id="clear">Remove all markers</button></footer>
+</aside>
+<div id="map"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+  const STORAGE_KEY = "my-map-markers";
+  const map = L.map("map").setView([63.4305, 10.3951], 12); // Trondheim; change as you like
+
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  }).addTo(map);
+
+  let markers = []; // { id, name, lat, lng, layer }
+
+  function save() {
+    const data = markers.map(({ id, name, lat, lng }) => ({ id, name, lat, lng }));
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch (e) {}
+  }
+
+  function popupContent(m) {
+    const div = document.createElement("div");
+    div.className = "popup";
+    const input = document.createElement("input");
+    input.value = m.name;
+    input.placeholder = "Name this place";
+    input.setAttribute("aria-label", "Marker name");
+    const row = document.createElement("div");
+    row.className = "row";
+    const saveBtn = document.createElement("button");
+    saveBtn.textContent = "Save";
+    const delBtn = document.createElement("button");
+    delBtn.textContent = "Delete";
+    row.append(saveBtn, delBtn);
+    div.append(input, row);
+    const rename = () => { m.name = input.value.trim() || "Untitled"; m.layer.closePopup(); render(); save(); };
+    saveBtn.onclick = rename;
+    input.onkeydown = e => { if (e.key === "Enter") rename(); };
+    delBtn.onclick = () => removeMarker(m.id);
+    return div;
+  }
+
+  function addMarker(lat, lng, name = "Untitled", id = Date.now() + Math.random(), open = false) {
+    const m = { id, name, lat, lng };
+    m.layer = L.marker([lat, lng], { draggable: true }).addTo(map);
+    m.layer.bindPopup(() => popupContent(m));
+    m.layer.on("dragend", () => { const p = m.layer.getLatLng(); m.lat = p.lat; m.lng = p.lng; render(); save(); });
+    markers.push(m);
+    render(); save();
+    if (open) m.layer.openPopup();
+    return m;
+  }
+
+  function removeMarker(id) {
+    const m = markers.find(x => x.id === id);
+    if (!m) return;
+    map.removeLayer(m.layer);
+    markers = markers.filter(x => x.id !== id);
+    render(); save();
+  }
+
+  function render() {
+    const list = document.getElementById("list");
+    list.innerHTML = "";
+    if (!markers.length) {
+      list.innerHTML = '<li class="empty" style="cursor:default">No markers yet.</li>';
+      return;
+    }
+    markers.forEach(m => {
+      const li = document.createElement("li");
+      const label = document.createElement("span");
+      label.textContent = m.name;
+      const coords = document.createElement("small");
+      coords.textContent = m.lat.toFixed(4) + ", " + m.lng.toFixed(4);
+      label.append(coords);
+      const del = document.createElement("button");
+      del.className = "del";
+      del.textContent = "Delete";
+      del.onclick = e => { e.stopPropagation(); removeMarker(m.id); };
+      li.append(label, del);
+      li.onclick = () => { map.flyTo([m.lat, m.lng], Math.max(map.getZoom(), 15)); m.layer.openPopup(); };
+      list.append(li);
+    });
+  }
+
+  map.on("click", e => addMarker(e.latlng.lat, e.latlng.lng, "Untitled", undefined, true));
+
+  document.getElementById("clear").onclick = () => {
+    if (markers.length && confirm("Remove all markers?")) [...markers].forEach(m => removeMarker(m.id));
+  };
+
+  // Restore saved markers
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    saved.forEach(s => addMarker(s.lat, s.lng, s.name, s.id));
+  } catch (e) {}
+  render();
+</script>
+</body>
+</html>
