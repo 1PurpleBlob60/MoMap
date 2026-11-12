@@ -70,6 +70,9 @@
   .popup .row .primary { background: #1f6f5c; border-color: #1f6f5c; color: #fff; }
   .popup .row .danger { color: #c0392b; }
 
+  /* map style switcher */
+  .leaflet-control-layers { border-radius: 12px; border: 0; box-shadow: var(--shadow); }
+
   @media (max-width: 700px) {
     aside { top: auto; left: 8px; right: 8px; bottom: 8px; width: auto; height: 36%; }
     header p { display: none; }
@@ -91,15 +94,38 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
   const STORAGE_KEY = "my-map-markers";
+  const LAYER_KEY = "momap-layer";
   const COLORS = ["#1f6f5c", "#e5534b", "#e8a317", "#3b7dd8", "#8e5bd1"];
 
-  const map = L.map("map", { zoomControl: false }).setView([63.4305, 10.3951], 12); // Trondheim
+  const map = L.map("map", { zoomControl: false, maxZoom: 19 }).setView([63.4305, 10.3951], 12); // Trondheim
   L.control.zoom({ position: "topright" }).addTo(map);
 
-L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-  }).addTo(map);
+  // Free map styles, no API key needed
+  const baseLayers = {
+    "Light": L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}", {
+      maxZoom: 19, maxNativeZoom: 16, attribution: "Tiles &copy; Esri"
+    }),
+    "Streets": L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", {
+      maxZoom: 19, attribution: "Tiles &copy; Esri"
+    }),
+    "OpenStreetMap": L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }),
+    "Satellite": L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+      maxZoom: 19, attribution: "Tiles &copy; Esri"
+    }),
+    "Terrain": L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19, maxNativeZoom: 17, subdomains: "abc",
+      attribution: 'Map data &copy; OpenStreetMap contributors, SRTM | Style &copy; <a href="https://opentopomap.org">OpenTopoMap</a>'
+    })
+  };
+
+  let startLayer = "Light";
+  try { startLayer = localStorage.getItem(LAYER_KEY) || "Light"; } catch (e) {}
+  (baseLayers[startLayer] || baseLayers["Light"]).addTo(map);
+  L.control.layers(baseLayers, null, { position: "topright" }).addTo(map);
+  map.on("baselayerchange", e => { try { localStorage.setItem(LAYER_KEY, e.name); } catch (err) {} });
 
   function makeIcon(color) {
     return L.divIcon({
