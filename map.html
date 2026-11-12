@@ -3,66 +3,116 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>My Map</title>
+<title>MoMap</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
-  :root { --bg:#f5f6f4; --ink:#1d2b24; --muted:#66736c; --line:#dfe3df; --accent:#1f6f5c; --danger:#b3382c; }
+  :root {
+    --panel:#ffffffee; --ink:#18231f; --muted:#6b7a73; --line:#e3e8e5; --accent:#1f6f5c; --danger:#c0392b;
+    --shadow:0 8px 30px rgba(0,0,0,.18);
+  }
   @media (prefers-color-scheme: dark) {
-    :root { --bg:#161c19; --ink:#e8eee9; --muted:#97a69d; --line:#2a352f; --accent:#4fb99d; --danger:#e57a6c; }
+    :root { --panel:#1b2420ee; --ink:#eaf1ed; --muted:#9baba3; --line:#2d3a34; --accent:#5cc7aa; --danger:#ef8577; --shadow:0 8px 30px rgba(0,0,0,.5); }
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
-  body { display: flex; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); }
-  aside { width: 300px; display: flex; flex-direction: column; border-right: 1px solid var(--line); }
-  header { padding: 18px 16px 12px; }
-  h1 { font-size: 1.15rem; margin: 0 0 4px; }
-  header p { margin: 0; font-size: .85rem; color: var(--muted); line-height: 1.4; }
-  ul { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; }
-  li { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--line); cursor: pointer; }
-  li:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
-  li span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  li small { display: block; color: var(--muted); font-size: .75rem; }
-  button { font: inherit; cursor: pointer; border-radius: 6px; border: 1px solid var(--line); background: transparent; color: var(--ink); padding: 4px 10px; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink); }
+  #map { position: fixed; inset: 0; }
+
+  /* floating panel */
+  aside {
+    position: fixed; z-index: 1000; top: 16px; left: 16px; bottom: 16px; width: 290px;
+    display: flex; flex-direction: column; overflow: hidden;
+    background: var(--panel); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow);
+  }
+  header { padding: 18px 18px 12px; }
+  h1 { font-size: 1.3rem; margin: 0 0 4px; letter-spacing: -.01em; }
+  h1 span { color: var(--accent); }
+  header p { margin: 0; font-size: .82rem; color: var(--muted); line-height: 1.45; }
+  .count { font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); padding: 0 18px 8px; }
+  ul { list-style: none; margin: 0; padding: 0 8px; overflow-y: auto; flex: 1; }
+  li { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 10px; cursor: pointer; }
+  li:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+  li .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+  li .txt { flex: 1; min-width: 0; }
+  li b { display: block; font-weight: 600; font-size: .9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  li small { color: var(--muted); font-size: .72rem; }
+  .empty { padding: 18px 12px; color: var(--muted); font-size: .88rem; cursor: default; }
+  .empty:hover { background: none; }
+  button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: var(--ink); padding: 4px 10px; }
+  button:hover { border-color: var(--accent); }
   button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .del { color: var(--danger); }
-  .empty { padding: 16px; color: var(--muted); font-size: .9rem; }
-  footer { padding: 12px 16px; border-top: 1px solid var(--line); }
-  #map { flex: 1; }
-  .popup input { width: 100%; padding: 6px; margin: 6px 0; border: 1px solid #bbb; border-radius: 4px; font: inherit; }
-  .popup .row { display: flex; gap: 6px; }
-  .popup button { color: #1d2b24; border-color: #bbb; }
+  .x { border: 0; color: var(--muted); font-size: 1.1rem; line-height: 1; padding: 4px 8px; }
+  .x:hover { color: var(--danger); }
+  footer { padding: 12px 18px; border-top: 1px solid var(--line); }
+  footer button { width: 100%; color: var(--danger); }
+
+  /* custom pin */
+  .pin-wrap { background: none; border: 0; }
+  .pin {
+    width: 30px; height: 30px; background: var(--c);
+    border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
+    border: 3px solid #fff; box-shadow: 0 4px 10px rgba(0,0,0,.4);
+    display: grid; place-items: center; transition: transform .15s;
+  }
+  .pin::after { content: ""; width: 9px; height: 9px; border-radius: 50%; background: #fff; }
+  .pin-wrap:hover .pin { transform: rotate(-45deg) scale(1.12); }
+
+  /* popup */
+  .leaflet-popup-content-wrapper { border-radius: 14px; box-shadow: var(--shadow); }
+  .popup { min-width: 190px; color: #18231f; }
+  .popup input { width: 100%; padding: 8px 10px; margin: 2px 0 10px; border: 1px solid #cfd8d3; border-radius: 8px; font: inherit; }
+  .swatches { display: flex; gap: 8px; margin-bottom: 12px; }
+  .sw { width: 22px; height: 22px; padding: 0; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 0 1px #cfd8d3; background: var(--c); }
+  .sw.on { box-shadow: 0 0 0 2px #18231f; }
+  .popup .row { display: flex; gap: 8px; }
+  .popup .row button { flex: 1; color: #18231f; border-color: #cfd8d3; padding: 6px; }
+  .popup .row .primary { background: #1f6f5c; border-color: #1f6f5c; color: #fff; }
+  .popup .row .danger { color: #c0392b; }
+
   @media (max-width: 700px) {
-    body { flex-direction: column-reverse; }
-    aside { width: 100%; height: 38%; border-right: 0; border-top: 1px solid var(--line); }
-    #map { height: 62%; flex: none; }
+    aside { top: auto; left: 8px; right: 8px; bottom: 8px; width: auto; height: 36%; }
+    header p { display: none; }
   }
 </style>
 </head>
 <body>
+<div id="map"></div>
 <aside>
   <header>
-    <h1>My map</h1>
-    <p>Click anywhere on the map to drop a marker. Markers are saved in your browser.</p>
+    <h1>Mo<span>Map</span></h1>
+    <p>Tap the map to drop a pin. Drag to move it. Saved in your browser.</p>
   </header>
+  <div class="count" id="count"></div>
   <ul id="list"></ul>
-  <footer><button id="clear">Remove all markers</button></footer>
+  <footer><button id="clear">Remove all pins</button></footer>
 </aside>
-<div id="map"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
   const STORAGE_KEY = "my-map-markers";
-  const map = L.map("map").setView([63.4305, 10.3951], 12); // Trondheim; change as you like
+  const COLORS = ["#1f6f5c", "#e5534b", "#e8a317", "#3b7dd8", "#8e5bd1"];
 
-  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  const map = L.map("map", { zoomControl: false }).setView([63.4305, 10.3951], 12); // Trondheim
+  L.control.zoom({ position: "topright" }).addTo(map);
+
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+    maxZoom: 20, subdomains: "abcd",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
   }).addTo(map);
 
-  let markers = []; // { id, name, lat, lng, layer }
+  function makeIcon(color) {
+    return L.divIcon({
+      className: "pin-wrap",
+      html: '<div class="pin" style="--c:' + color + '"></div>',
+      iconSize: [30, 30], iconAnchor: [15, 38], popupAnchor: [0, -38]
+    });
+  }
+
+  let markers = []; // { id, name, lat, lng, color, layer }
 
   function save() {
-    const data = markers.map(({ id, name, lat, lng }) => ({ id, name, lat, lng }));
+    const data = markers.map(({ id, name, lat, lng, color }) => ({ id, name, lat, lng, color }));
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch (e) {}
   }
 
@@ -72,15 +122,34 @@
     const input = document.createElement("input");
     input.value = m.name;
     input.placeholder = "Name this place";
-    input.setAttribute("aria-label", "Marker name");
+    input.setAttribute("aria-label", "Pin name");
+
+    const sw = document.createElement("div");
+    sw.className = "swatches";
+    COLORS.forEach(c => {
+      const b = document.createElement("button");
+      b.className = "sw" + (c === m.color ? " on" : "");
+      b.style.setProperty("--c", c);
+      b.setAttribute("aria-label", "Color " + c);
+      b.onclick = () => {
+        m.color = c;
+        m.layer.setIcon(makeIcon(c));
+        sw.querySelectorAll(".sw").forEach(x => x.classList.remove("on"));
+        b.classList.add("on");
+        render(); save();
+      };
+      sw.append(b);
+    });
+
     const row = document.createElement("div");
     row.className = "row";
     const saveBtn = document.createElement("button");
-    saveBtn.textContent = "Save";
+    saveBtn.className = "primary"; saveBtn.textContent = "Save";
     const delBtn = document.createElement("button");
-    delBtn.textContent = "Delete";
+    delBtn.className = "danger"; delBtn.textContent = "Delete";
     row.append(saveBtn, delBtn);
-    div.append(input, row);
+    div.append(input, sw, row);
+
     const rename = () => { m.name = input.value.trim() || "Untitled"; m.layer.closePopup(); render(); save(); };
     saveBtn.onclick = rename;
     input.onkeydown = e => { if (e.key === "Enter") rename(); };
@@ -88,9 +157,10 @@
     return div;
   }
 
-  function addMarker(lat, lng, name = "Untitled", id = Date.now() + Math.random(), open = false) {
-    const m = { id, name, lat, lng };
-    m.layer = L.marker([lat, lng], { draggable: true }).addTo(map);
+  function addMarker(lat, lng, name = "Untitled", id = Date.now() + Math.random(), open = false, color) {
+    color = color || COLORS[markers.length % COLORS.length];
+    const m = { id, name, lat, lng, color };
+    m.layer = L.marker([lat, lng], { draggable: true, icon: makeIcon(color) }).addTo(map);
     m.layer.bindPopup(() => popupContent(m));
     m.layer.on("dragend", () => { const p = m.layer.getLatLng(); m.lat = p.lat; m.lng = p.lng; render(); save(); });
     markers.push(m);
@@ -109,23 +179,27 @@
 
   function render() {
     const list = document.getElementById("list");
+    document.getElementById("count").textContent = markers.length + (markers.length === 1 ? " pin" : " pins");
     list.innerHTML = "";
     if (!markers.length) {
-      list.innerHTML = '<li class="empty" style="cursor:default">No markers yet.</li>';
+      list.innerHTML = '<li class="empty">No pins yet. Click the map to add one.</li>';
       return;
     }
     markers.forEach(m => {
       const li = document.createElement("li");
-      const label = document.createElement("span");
-      label.textContent = m.name;
+      const dot = document.createElement("span");
+      dot.className = "dot"; dot.style.background = m.color;
+      const txt = document.createElement("div");
+      txt.className = "txt";
+      const name = document.createElement("b");
+      name.textContent = m.name;
       const coords = document.createElement("small");
       coords.textContent = m.lat.toFixed(4) + ", " + m.lng.toFixed(4);
-      label.append(coords);
+      txt.append(name, coords);
       const del = document.createElement("button");
-      del.className = "del";
-      del.textContent = "Delete";
+      del.className = "x"; del.textContent = "\u00d7"; del.setAttribute("aria-label", "Delete " + m.name);
       del.onclick = e => { e.stopPropagation(); removeMarker(m.id); };
-      li.append(label, del);
+      li.append(dot, txt, del);
       li.onclick = () => { map.flyTo([m.lat, m.lng], Math.max(map.getZoom(), 15)); m.layer.openPopup(); };
       list.append(li);
     });
@@ -134,13 +208,12 @@
   map.on("click", e => addMarker(e.latlng.lat, e.latlng.lng, "Untitled", undefined, true));
 
   document.getElementById("clear").onclick = () => {
-    if (markers.length && confirm("Remove all markers?")) [...markers].forEach(m => removeMarker(m.id));
+    if (markers.length && confirm("Remove all pins?")) [...markers].forEach(m => removeMarker(m.id));
   };
 
-  // Restore saved markers
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-    saved.forEach(s => addMarker(s.lat, s.lng, s.name, s.id));
+    saved.forEach(s => addMarker(s.lat, s.lng, s.name, s.id, false, s.color));
   } catch (e) {}
   render();
 </script>
